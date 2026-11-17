@@ -537,6 +537,15 @@ export function parseSnapshot(text: string): Snapshot {
     if (typeof p.slug !== 'string' || typeof p.name !== 'string' || typeof p.tvl_usd !== 'number' || !Number.isFinite(p.tvl_usd)) {
       throw new SnapshotError(`snapshot.json's protocol ${i} lacks a slug, a name or a TVL`);
     }
+    // A negative TVL is not a protocol the model can score: without this guard a negative TVL
+    // would flow into base = tvl x comps, collapse its implied value to the floor of $1, and
+    // silently misrank the row instead of refusing the bad snapshot. (The sealed snapshot
+    // carries no negative TVL, so this guard never fires on real input.)
+    if (p.tvl_usd < 0) throw new SnapshotError(`snapshot.json's protocol ${i} (${p.slug}) has a negative TVL`);
+    // A negative market cap is a sentinel, not a value: the sealed snapshot records -1 for
+    // autofinance, a live-token protocol whose cap is unknown. Coerce it to null (no market
+    // cap) instead of carrying -1 into the live view and the comps sample, where it would
+    // sort below zero-cap protocols and read as a real figure.
     return {
       slug: p.slug,
       name: p.name,
@@ -544,7 +553,7 @@ export function parseSnapshot(text: string): Snapshot {
       chains: Array.isArray(p.chains) ? p.chains.filter((c): c is string => typeof c === 'string') : [],
       tvl_usd: p.tvl_usd,
       change_7d: typeof p.change_7d === 'number' && Number.isFinite(p.change_7d) ? p.change_7d : null,
-      mcap_usd: typeof p.mcap_usd === 'number' && Number.isFinite(p.mcap_usd) ? p.mcap_usd : null,
+      mcap_usd: typeof p.mcap_usd === 'number' && Number.isFinite(p.mcap_usd) && p.mcap_usd >= 0 ? p.mcap_usd : null,
       listed_at: typeof p.listed_at === 'string' ? p.listed_at : null,
       gecko_id: typeof p.gecko_id === 'string' ? p.gecko_id : null,
       symbol: typeof p.symbol === 'string' ? p.symbol : null,
