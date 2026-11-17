@@ -80,6 +80,17 @@ for (const name of shots) {
     process.stderr.write(`token radar: screenshots/${name}: a name is letters, digits and . _ -, 1 to 128 characters\n`);
     process.exit(1);
   }
+  // A zero-byte or over-cap screenshot would otherwise be copied into /output and only fail later
+  // inside the dossier build; refuse it here, while the cause is still obvious.
+  const size = statSync(join(here, 'screenshots', name)).size;
+  if (size === 0) {
+    process.stderr.write(`token radar: screenshots/${name} is empty: hand in a real screenshot, not a placeholder\n`);
+    process.exit(1);
+  }
+  if (size > SCREENSHOT_CAPS.max_bytes) {
+    process.stderr.write(`token radar: screenshots/${name} is ${size} bytes, over the ${SCREENSHOT_CAPS.max_bytes}-byte cap\n`);
+    process.exit(1);
+  }
 }
 
 // The dossier is written last: the scorer rebuilds it from this /output and compares bytes.
